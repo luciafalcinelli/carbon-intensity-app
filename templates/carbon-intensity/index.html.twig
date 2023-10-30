@@ -1,0 +1,80 @@
+{% extends 'base.html.twig' %}
+
+{% block content %}
+{% for flash_message in app.flashes('error') %}
+    <div class="alert alert-danger">
+        {{ flash_message }}
+    </div>
+{% endfor %}
+
+    <h2>Carbon Intensity Data</h2>
+    <div class="row">
+        <div class="col-6">
+            <div class="region-info">
+                <p><strong>Region Selected:</strong> {{ shortname }}</p>
+                <p><strong>Average:</strong> {{ avg }}%</p>
+            </div>
+        </div>
+        <div class="col-6">
+            <form method="post" action="{{ path('app_intensity', {'region': region}) }}">
+                <div class="form-group">
+                    <label for="region">Select Region:</label>
+                    <select id="region" name="region">
+                        {% for key, name in regions %}
+                            <option value="{{ key }}" {{ key == region ? 'selected' : '' }}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="energy">Select Energy Generation:</label>
+                    <select id="energy" name="energy">
+                        {% for key, name in energies %}
+                            <option value="{{ key }}" {{ key == energy ? 'selected' : '' }}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="from">From:</label>
+                            <input type="datetime-local" id="from" name="from">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="to">To:</label>
+                            <input type="datetime-local" id="to" name="to">
+                        </div>
+                    </div>
+                </div>
+                <input type="submit" class="btn btn-primary" value="View Data">
+            </form>
+        </div>
+    </div>
+
+    {% if data %}
+        <div class="region-info">
+            {% for key, entry in data %}
+                <p><strong>Date:</strong> {{ key }}</p>
+                <table class="table mb-3">
+                    <thead>
+                        <tr>
+                            <th>Fuel</th>
+                            <th>Total</th>
+                            <th>Average Percentage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for key, mix in entry %}
+                            <tr>
+                                <td>{{ key }}</td>
+                                <td>{{ mix.totalPerc }}</td>
+                                <td>{{ mix.averagePerc }}%</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endblock %}
