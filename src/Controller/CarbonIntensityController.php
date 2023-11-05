@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use Exception;
+use Psr\Log\LoggerInterface;
 use App\Entity\CarbonIntensity;
 use App\Service\CarbonIntensityService;
 use Symfony\Component\HttpFoundation\Request;
@@ -20,15 +21,17 @@ class CarbonIntensityController extends AbstractController
      * Service that provides helper methods related to Carbon Intensity.
      */
     private $carbonIntensityService;
+    private $logger;
 
     /**
      * Initialize controller with necessary services.
      *
      * @param CarbonIntensityService $intensityService Service for Carbon Intensity related operations.
      */
-    public function __construct(CarbonIntensityService $carbonIntensityService)
+    public function __construct(CarbonIntensityService $carbonIntensityService, LoggerInterface $logger)
     {
         $this->carbonIntensityService = $carbonIntensityService;
+        $this->logger = $logger;
     }
 
     /**
@@ -81,5 +84,65 @@ class CarbonIntensityController extends AbstractController
             'energies' => $energies,
             'energy' => $selectedEnergy,
         ]);
+    }
+
+    #[Route('/getData', name: 'app_get_data')]
+    public function getData(Request $request): Response
+    {
+        $requestData = json_decode($request->getContent(), true);
+        $region = $requestData['region'] ?? 1;
+        $from = $requestData['from'] ?? '';
+        $to = $requestData['to'] ?? '';
+        $energy = $requestData['energy'] ?? '';
+
+        // Fetch and process the intensity data
+        $carbonIntensity = new CarbonIntensity();
+        try {
+            
+            $fetchedData = $carbonIntensity->fetchIntensityData($region, $from, $to);
+            $data = $carbonIntensity->aggregateDatabyDate($fetchedData['data']);
+            $data = $carbonIntensity->filterByEnergyType($data, $energy);
+            $avg = $carbonIntensity->avgForPeriod($data, $energy);
+            $data = ['data' => $data, 'avg' => $avg];
+
+        } catch (Exception $e) {
+
+                  // Use the logger service to log the error.
+                $this->logger->error("There was an error fetching the data: " . $e->getMessage());
+        }
+
+        // Render the results in a view
+        return new Response(json_encode($data), Response::HTTP_OK, ['Content-Type' => 'application/json']);
+    }
+
+    #[Route('/regions', name: 'app_get_regions')]
+    public function getRegions()
+    {
+        try {
+            
+            $regions = $this->carbonIntensityService->getRegions();
+
+        } catch (Exception $e) {
+
+            $this->logger->error("There was an error fetching the data: " . $e->getMessage());
+        }
+
+      
+        return new Response(json_encode($regions), Response::HTTP_OK, ['Content-Type' => 'application/json']);
+    }
+
+    #[Route('/energies', name: 'app_get_energies')]
+    public function getEnergies()
+    {
+        try {
+            
+            $energies = $this->carbonIntensityService->getEnergies();
+
+        } catch (Exception $e) {
+
+            $this->logger->error("There was an error fetching the data: " . $e->getMessage());
+        }
+
+        return new Response(json_encode($energies), Response::HTTP_OK, ['Content-Type' => 'application/json']);
     }
 }
