@@ -9,6 +9,7 @@ use App\Service\CarbonIntensityService;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 
 /**
@@ -59,12 +60,11 @@ class CarbonIntensityController extends AbstractController
         // Fetch and process the intensity data
         $carbonIntensity = new CarbonIntensity();
         try {
-            
+
             $fetchedData = $carbonIntensity->fetchIntensityData($selectedRegion, $selectedFrom, $selectedTo);
             $data = $carbonIntensity->aggregateDatabyDate($fetchedData['data']);
             $data = $carbonIntensity->filterByEnergyType($data, $selectedEnergy);
             $avg = $carbonIntensity->avgForPeriod($data, $selectedEnergy);
-
         } catch (Exception $e) {
 
             $this->addFlash('error', "There was an error fetching the data: " . $e->getMessage());
@@ -90,44 +90,51 @@ class CarbonIntensityController extends AbstractController
     public function getData(Request $request): Response
     {
         $requestData = json_decode($request->getContent(), true);
-        $region = $requestData['region'] ?? 1;
+
+        // Basic validation
+        if (!isset($requestData['region']) || !isset($requestData['energy'])) {
+            return new JsonResponse(['error' => 'Missing required parameters'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $region = $requestData['region'];
         $from = $requestData['from'] ?? '';
         $to = $requestData['to'] ?? '';
         $energy = $requestData['energy'] ?? '';
 
+        // Check if from date is earlier than to date
+        if (new \DateTime($from) > new \DateTime($to)) {
+            return new JsonResponse(['error' => 'From date must be earlier than To date'], Response::HTTP_BAD_REQUEST);
+        }
+
         // Fetch and process the intensity data
         $carbonIntensity = new CarbonIntensity();
         try {
-            
             $fetchedData = $carbonIntensity->fetchIntensityData($region, $from, $to);
             $data = $carbonIntensity->aggregateDatabyDate($fetchedData['data']);
             $data = $carbonIntensity->filterByEnergyType($data, $energy);
             $avg = $carbonIntensity->avgForPeriod($data, $energy);
             $data = ['data' => $data, 'avg' => $avg];
-
         } catch (Exception $e) {
-
-                  // Use the logger service to log the error.
-                $this->logger->error("There was an error fetching the data: " . $e->getMessage());
+            // Use the logger service to log the error.
+            $this->logger->error("There was an error fetching the data: " . $e->getMessage());
+            return new JsonResponse(['error' => 'An error occurred while fetching data'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
-        // Render the results in a view
-        return new Response(json_encode($data), Response::HTTP_OK, ['Content-Type' => 'application/json']);
+        return new JsonResponse($data, Response::HTTP_OK);
     }
 
     #[Route('/regions', name: 'app_get_regions')]
     public function getRegions()
     {
         try {
-            
-            $regions = $this->carbonIntensityService->getRegions();
 
+            $regions = $this->carbonIntensityService->getRegions();
         } catch (Exception $e) {
 
             $this->logger->error("There was an error fetching the data: " . $e->getMessage());
         }
 
-      
+
         return new Response(json_encode($regions), Response::HTTP_OK, ['Content-Type' => 'application/json']);
     }
 
@@ -135,9 +142,8 @@ class CarbonIntensityController extends AbstractController
     public function getEnergies()
     {
         try {
-            
-            $energies = $this->carbonIntensityService->getEnergies();
 
+            $energies = $this->carbonIntensityService->getEnergies();
         } catch (Exception $e) {
 
             $this->logger->error("There was an error fetching the data: " . $e->getMessage());
